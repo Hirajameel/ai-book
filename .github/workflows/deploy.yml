@@ -6,25 +6,33 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   deploy:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend-docu
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: yarn
+          cache-dependency-path: frontend-docu/yarn.lock
 
       - name: Install dependencies
-        run: |
-          cd frontend-docu
-          yarn install --frozen-lockfile
+        run: yarn install --frozen-lockfile
+
       - name: Build website
-        run: |
-          cd frontend-docu
-          yarn build
+        run: yarn build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
