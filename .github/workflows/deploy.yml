@@ -15,9 +15,6 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./frontend-docu
     steps:
       - uses: actions/checkout@v4
 
@@ -25,14 +22,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: yarn
-          cache-dependency-path: frontend-docu/yarn.lock
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          cd frontend-docu
+          yarn install
 
       - name: Build website
-        run: yarn build
+        run: |
+          cd frontend-docu
+          yarn build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
