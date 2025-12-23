@@ -1,0 +1,101 @@
+# ROS 2 Service Contract: Robot State Management
+
+## Service: SetRobotState
+
+### Overview
+Service for triggering robot state changes (e.g., stand up, sit down, walk, stop).
+
+### Request Message (`SetRobotState.srv`)
+
+```yaml
+# Request parameters
+string state_command    # Command to set robot state (e.g., "stand", "sit", "walk", "stop")
+float64[] parameters   # Additional parameters for the state command
+---
+# Response parameters
+bool success           # True if the state change was initiated successfully
+string message         # Human-readable status message
+int32 error_code       # Error code (0 = success, non-zero = error)
+```
+
+### Request Fields
+- `state_command`: The target state for the robot
+  - Valid values: "stand", "sit", "walk", "stop", "reset", "calibrate"
+  - Required: Yes
+  - Type: string
+- `parameters`: Additional parameters for the state command
+  - Usage: Optional parameters like walking speed, step height, etc.
+  - Type: array of float64
+
+### Response Fields
+- `success`: Indicates if the state change was successfully initiated
+  - Type: bool
+  - true: Command accepted and processing started
+  - false: Command rejected or error occurred
+- `message`: Human-readable status message
+  - Type: string
+  - Example: "Robot transitioning to stand position" or "Invalid state command"
+- `error_code`: Numeric error code
+  - Type: int32
+  - 0: Success
+  - 1: Invalid command
+  - 2: Robot in unsafe state
+  - 3: Hardware error
+  - 4: Communication error
+
+### Usage Example
+
+```python
+import rclpy
+from rclpy.node import Node
+from my_robot_interfaces.srv import SetRobotState  # Assuming custom package
+
+class RobotController(Node):
+    def __init__(self):
+        super().__init__('robot_controller')
+        self.cli = self.create_client(SetRobotState, 'set_robot_state')
+        while not self.cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting again...')
+
+    def send_state_command(self, command, params=[]):
+        request = SetRobotState.Request()
+        request.state_command = command
+        request.parameters = params
+
+        future = self.cli.call_async(request)
+        return future
+
+def main(args=None):
+    rclpy.init(args=args)
+    controller = RobotController()
+
+    # Send a stand up command
+    future = controller.send_state_command('stand')
+    rclpy.spin_until_future_complete(controller, future)
+
+    response = future.result()
+    if response.success:
+        print(f"Robot state change successful: {response.message}")
+    else:
+        print(f"Robot state change failed: {response.message}")
+
+    controller.destroy_node()
+    rclpy.shutdown()
+```
+
+### Quality of Service (QoS) Settings
+- Reliability: Reliable
+- Durability: Volatile
+- History: Keep last
+- Depth: 10
+
+### Error Handling
+- If robot is in an unsafe state (e.g., falling), return error_code 2
+- If command is not recognized, return error_code 1
+- If hardware failure prevents state change, return error_code 3
+- If communication failure occurs, return error_code 4
+
+### Validation Rules
+- state_command must be one of the valid values
+- parameters array length must match expected values for the command
+- Robot must be in a safe state to accept certain commands (e.g., cannot sit while walking)

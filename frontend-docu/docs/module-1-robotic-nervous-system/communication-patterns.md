@@ -1,0 +1,384 @@
+---
+title: Chapter 3 - Deep Dive into Topics, Services, and Actions
+sidebar_label: Chapter 3 Deep Dive into Topics, Services, and Actions
+id: communication-patterns
+---
+
+# Chapter 3: Deep Dive into Topics, Services, and Actions
+
+## Communication Patterns in ROS 2
+
+ROS 2 provides three primary communication patterns for inter-node communication: Topics (publish/subscribe), Services (request/response), and Actions (goal-oriented with feedback). Understanding these patterns is crucial for designing effective humanoid robot systems.
+
+## Topics: Publish/Subscribe Pattern
+
+Topics implement an asynchronous, many-to-many communication pattern. Publishers send messages to topics without knowing who subscribes, and subscribers receive messages from topics without knowing who publishes.
+
+### Basic Topic Communication
+
+```mermaid
+graph LR
+    A[Publisher Node] -->|Publishes Messages| C[Topic: /sensor_data]
+    B[Publisher Node] -->|Publishes Messages| C
+    C -->|Subscribes| D[Subscriber Node]
+    C -->|Subscribes| E[Subscriber Node]
+    C -->|Subscribes| F[Subscriber Node]
+
+    style A fill:#4CAF50
+    style B fill:#4CAF50
+    style C fill:#2196F3
+    style D fill:#FF9800
+    style E fill:#FF9800
+    style F fill:#FF9800
+```
+
+In this diagram:
+- Green nodes: Publishers (send data)
+- Blue node: Topic (communication channel)
+- Orange nodes: Subscribers (receive data)
+
+### Implementing Publisher/Subscriber Pattern
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+class SensorPublisher(Node):
+    def __init__(self):
+        super().__init__('sensor_publisher')
+        self.publisher_ = self.create_publisher(String, 'sensor_data', 10)
+        timer_period = 0.1  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+
+    def timer_callback(self):
+        msg = String()
+        msg.data = f'Sensor reading: {self.get_clock().now().nanoseconds}'
+        self.publisher_.publish(msg)
+        self.get_logger().info(f'Publishing: "{msg.data}"')
+
+class MotorSubscriber(Node):
+    def __init__(self):
+        super().__init__('motor_subscriber')
+        self.subscription = self.create_subscription(
+            String,
+            'motor_commands',
+            self.listener_callback,
+            10)
+        self.subscription  # prevent unused variable warning
+
+    def listener_callback(self, msg):
+        self.get_logger().info(f'Received motor command: "{msg.data}"')
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    # Create both nodes
+    sensor_publisher = SensorPublisher()
+    motor_subscriber = MotorSubscriber()
+
+    # Spin both nodes
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(sensor_publisher)
+    executor.add_node(motor_subscriber)
+
+    try:
+        executor.spin()
+    finally:
+        sensor_publisher.destroy_node()
+        motor_subscriber.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+### Quality of Service for Topics
+
+For humanoid robot applications, QoS settings are critical:
+
+```python
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+
+# For sensor data (high frequency, may lose some messages)
+sensor_qos = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=5
+)
+
+# For critical control data (must not lose messages)
+control_qos = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=10
+)
+```
+
+## Services: Request/Response Pattern
+
+Services provide synchronous, one-to-one communication where a client sends a request and waits for a response from a server.
+
+### Service Communication Pattern
+
+```mermaid
+graph LR
+    A[Service Client] -->|Request| C[Service Server]
+    C -->|Response| A
+
+    style A fill:#E91E63
+    style C fill:#9C27B0
+```
+
+In this diagram:
+- Pink node: Service Client (sends request, waits for response)
+- Purple node: Service Server (receives request, sends response)
+
+### Implementing Service/Client Pattern
+
+First, define the service interface in a `.srv` file (e.g., `SetJointPosition.srv`):
+```
+# Request
+string joint_name
+float64 position
+---
+# Response
+bool success
+string message
+```
+
+Then implement the server:
+
+```python
+from rclpy.node import Node
+from rclpy.action import ActionServer
+from your_interfaces.srv import SetJointPosition  # Custom service type
+
+class JointControlService(Node):
+    def __init__(self):
+        super().__init__('joint_control_service')
+        self.srv = self.create_service(
+            SetJointPosition,
+            'set_joint_position',
+            self.set_joint_position_callback
+        )
+
+    def set_joint_position_callback(self, request, response):
+        # Implement joint control logic here
+        self.get_logger().info(f'Setting {request.joint_name} to {request.position}')
+
+        # Simulate joint movement
+        success = self.move_joint(request.joint_name, request.position)
+
+        response.success = success
+        response.message = f'Joint {request.joint_name} set to {request.position}'
+
+        return response
+
+    def move_joint(self, joint_name, position):
+        # Implementation of actual joint movement
+        # This would interface with real hardware or simulation
+        return True  # Simulated success
+```
+
+And the client:
+
+```python
+import rclpy
+from rclpy.node import Node
+from your_interfaces.srv import SetJointPosition
+
+class JointControlClient(Node):
+    def __init__(self):
+        super().__init__('joint_control_client')
+        self.cli = self.create_client(SetJointPosition, 'set_joint_position')
+        while not self.cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting again...')
+
+    def send_request(self, joint_name, position):
+        request = SetJointPosition.Request()
+        request.joint_name = joint_name
+        request.position = position
+        self.future = self.cli.call_async(request)
+        return self.future
+
+def main(args=None):
+    rclpy.init(args=args)
+    joint_control_client = JointControlClient()
+
+    future = joint_control_client.send_request('left_knee_joint', 0.5)
+
+    rclpy.spin_until_future_complete(joint_control_client, future)
+
+    response = future.result()
+    joint_control_client.get_logger().info(f'Response: {response.success}, {response.message}')
+
+    joint_control_client.destroy_node()
+    rclpy.shutdown()
+```
+
+## Actions: Goal-Oriented Communication
+
+Actions are used for long-running tasks that require feedback, goal management, and cancellation. They're ideal for humanoid robot behaviors like walking, grasping, or navigation.
+
+### Action Communication Pattern
+
+```mermaid
+graph LR
+    A[Action Client] -->|Goal Request| C[Action Server]
+    C -->|Feedback| A
+    C -->|Result| A
+    A -->|Cancel| C
+
+    style A fill:#FF5722
+    style C fill:#795548
+```
+
+In this diagram:
+- Orange node: Action Client (sends goals, receives feedback/results, can cancel)
+- Brown node: Action Server (processes goals, sends feedback/results)
+
+### Implementing Action Pattern
+
+Define the action interface in a `.action` file (e.g., `Walk.action`):
+```
+# Goal
+float64[] target_position
+float64 speed
+---
+# Result
+bool success
+string message
+float64[] final_position
+---
+# Feedback
+float64[] current_position
+float64[] remaining_distance
+string status
+```
+
+Implement the action server:
+
+```python
+from rclpy.action import ActionServer, GoalResponse, CancelResponse
+from rclpy.callback_groups import ReentrantCallbackGroup
+from your_interfaces.action import Walk  # Custom action type
+
+class WalkActionServer(Node):
+    def __init__(self):
+        super().__init__('walk_action_server')
+        self._action_server = ActionServer(
+            self,
+            Walk,
+            'walk_to_position',
+            execute_callback=self.execute_callback,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback,
+            callback_group=ReentrantCallbackGroup())
+
+    def goal_callback(self, goal_request):
+        # Accept or reject the goal
+        self.get_logger().info('Received goal request')
+        return GoalResponse.ACCEPT
+
+    def cancel_callback(self, goal_handle):
+        # Accept or reject the cancel request
+        self.get_logger().info('Received cancel request')
+        return CancelResponse.ACCEPT
+
+    async def execute_callback(self, goal_handle):
+        self.get_logger().info('Executing goal...')
+
+        # Simulate walking process
+        feedback_msg = Walk.Feedback()
+        result = Walk.Result()
+
+        # In a real implementation, this would control the robot's walking
+        for i in range(10):
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+                result.success = False
+                result.message = 'Goal canceled'
+                return result
+
+            # Simulate progress
+            feedback_msg.current_position = [i * 0.1, 0.0, 0.0]
+            feedback_msg.remaining_distance = [1.0 - (i * 0.1), 0.0, 0.0]
+            feedback_msg.status = f'Walking step {i+1}/10'
+
+            goal_handle.publish_feedback(feedback_msg)
+            self.get_logger().info(f'Feedback: {feedback_msg.status}')
+
+            # Sleep to simulate walking
+            await asyncio.sleep(0.5)
+
+        goal_handle.succeed()
+        result.success = True
+        result.message = 'Successfully walked to position'
+        result.final_position = [1.0, 0.0, 0.0]
+
+        self.get_logger().info('Goal succeeded')
+        return result
+```
+
+## Humanoid Robot Communication Architecture
+
+For humanoid robots, communication patterns are often combined in complex ways:
+
+```mermaid
+graph TB
+    subgraph "Perception Layer"
+        A[IMU Sensor Node] -->|sensor_data/imu| M[middleware]
+        B[Camera Node] -->|sensor_data/image| M
+        C[Lidar Node] -->|sensor_data/scan| M
+    end
+
+    subgraph "Processing Layer"
+        M -->|processed_data| D[State Estimation Node]
+        D -->|robot_state| E[Behavior Manager Node]
+    end
+
+    subgraph "Control Layer"
+        E -->|joint_commands| F[Joint Controller Node]
+        F -->|motor_commands| G[Motor Drivers]
+    end
+
+    subgraph "High-level Planning"
+        E -.->|service_request| H[Path Planner Service]
+        H -.->|service_response| E
+    end
+
+    style A fill:#8BC34A
+    style B fill:#8BC34A
+    style C fill:#8BC34A
+    style D fill:#2196F3
+    style E fill:#FF9800
+    style F fill:#FF5722
+    style G fill:#9C27B0
+    style H fill:#E91E63
+```
+
+In this architecture:
+- Green: Sensor nodes (publishers)
+- Blue: State estimation (subscriber and publisher)
+- Orange: Behavior management (complex communication)
+- Red: Service-based planning
+- Purple: Motor drivers
+- Pink: Joint controllers
+
+## Performance Considerations
+
+:::info
+**Hardware Note**: On Jetson Orin Nano, communication patterns have different performance characteristics:
+- Topics: Up to 10kHz for critical control data
+- Services: `<10Hz` for configuration changes
+- Actions: As needed for complex behaviors
+:::
+
+For real-time humanoid control, consider:
+- Use reliable QoS for critical control data
+## Summary
+
+This chapter explored the three primary communication patterns in ROS 2: topics for asynchronous data flow, services for synchronous request/response, and actions for complex, long-running tasks. We demonstrated how these patterns work together in humanoid robot systems and provided practical examples for implementation. The next chapter will cover how to bridge high-level AI logic with these ROS 2 communication patterns.
