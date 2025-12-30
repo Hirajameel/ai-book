@@ -1,0 +1,104 @@
+# API Contract: RAG Ingestion Pipeline
+
+## Overview
+
+This contract defines the interface for the RAG ingestion pipeline that handles URL crawling, content extraction, embedding generation, and vector storage.
+
+## Configuration Schema
+
+### Crawl Configuration
+```json
+{
+  "target_urls": ["https://example.com"],
+  "max_depth": 1,
+  "respect_robots_txt": true,
+  "crawl_delay": 1.0,
+  "include_patterns": [],
+  "exclude_patterns": []
+}
+```
+
+### Embedding Configuration
+```json
+{
+  "model_name": "embed-english-v3.0",
+  "input_type": "search_document",
+  "batch_size": 96,
+  "api_key": "string"
+}
+```
+
+### Qdrant Configuration
+```json
+{
+  "url": "https://your-cluster-url.qdrant.tech:6333",
+  "api_key": "string",
+  "collection_name": "rag_collection",
+  "vector_size": 1024,
+  "distance_metric": "Cosine"
+}
+```
+
+## Data Models
+
+### Document Chunk
+```json
+{
+  "id": "unique_chunk_id",
+  "source_url": "https://example.com/page",
+  "content": "Text content of the chunk",
+  "section_heading": "Main Section",
+  "chunk_index": 0,
+  "metadata": {
+    "original_url": "https://example.com/page",
+    "section": "Main Section",
+    "chunk_num": 0,
+    "total_chunks": 5
+  }
+}
+```
+
+### Embedding Result
+```json
+{
+  "chunk_id": "unique_chunk_id",
+  "vector": [0.1, 0.2, 0.3, ...],  // Array of floats
+  "metadata": {
+    "source_url": "https://example.com/page",
+    "section_heading": "Main Section",
+    "chunk_index": 0
+  }
+}
+```
+
+## Process Flow Contract
+
+### Input Validation
+- All URLs must be valid and accessible
+- API keys must be provided and valid
+- Collection name must follow Qdrant naming conventions
+
+### Processing Guarantees
+- Text extraction preserves semantic meaning
+- Chunks do not exceed maximum size while preserving context
+- Embeddings are generated with consistent dimensions
+- Metadata is preserved throughout the pipeline
+
+### Error Handling
+- Network errors are retried with exponential backoff
+- Invalid content is skipped with appropriate logging
+- Rate limits are respected with appropriate delays
+- Partial failures do not stop the entire pipeline
+
+### Success Criteria
+- All valid URLs are processed successfully
+- Embeddings are stored in Qdrant with metadata
+- Processed statistics are logged
+- Pipeline exits with success status
+
+## Performance Guarantees
+
+- Processing rate: Minimum 10 pages per minute (with API constraints)
+- Memory usage: Below 512MB for typical workloads
+- Retry mechanism: Handles temporary failures gracefully
+- Progress tracking: Regular status updates during processing

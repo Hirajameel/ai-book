@@ -10,8 +10,8 @@ import {themes as prismThemes} from 'prism-react-renderer';
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'My Site',
-  tagline: 'Dinosaurs are cool',
+  title: 'The Humanoid AI Book',
+  tagline: 'Designing the Future of Intelligent Robotics',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -74,6 +74,17 @@ const config = {
     ],
   ],
 
+  headTags: [
+    {
+      tagName: 'script',
+      attributes: {
+        type: 'text/javascript',
+      },
+      innerHTML: `
+        window.API_BASE_URL = 'http://localhost:8000';
+      `,
+    },
+  ],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
@@ -83,7 +94,7 @@ const config = {
         respectPrefersColorScheme: true,
       },
       navbar: {
-        title: 'My Book',
+        title: 'Humanoid Intelligence',
         logo: {
           alt: 'My Site Logo',
           src: 'img/logo.svg',

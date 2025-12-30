@@ -3,6 +3,7 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import HomepageFeatures from '@site/src/components/HomepageFeatures';
+import Chatbot from '@site/src/components/Chatbot';
 
 import Heading from '@theme/Heading';
 import styles from './index.module.css';
@@ -20,7 +21,7 @@ function HomepageHeader() {
           <Link
             className="button button--secondary button--lg"
             to="/docs/intro">
-            Docusaurus Tutorial - 5min ⏱️
+            Humanoid Robotics Guide 🚀
           </Link>
         </div>
       </div>
@@ -37,6 +38,9 @@ export default function Home() {
       <HomepageHeader />
       <main>
         <HomepageFeatures />
+        <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+          <Chatbot />
+        </div>
       </main>
     </Layout>
   );

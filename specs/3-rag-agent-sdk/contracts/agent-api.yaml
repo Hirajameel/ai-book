@@ -1,0 +1,75 @@
+# API Contract: RAG Agent Interface
+
+## Agent Query Endpoint
+
+### Request
+```
+POST /query
+```
+
+**Headers**:
+- `Content-Type: application/json`
+- `Authorization: Bearer {API_KEY}` (if authentication is implemented)
+
+**Body**:
+```json
+{
+  "query": "What are Digital Twins in Robotics?",
+  "session_id": "optional-session-identifier"
+}
+```
+
+**Body Schema**:
+- `query` (string, required): The natural language question from the user
+- `session_id` (string, optional): Identifier to maintain conversation context
+
+### Response
+**Success Response (200 OK)**:
+```json
+{
+  "response": "Digital Twins in Robotics refer to virtual replicas of physical robots...",
+  "citations": [
+    {
+      "url": "https://hirajameel.github.io/ai-book/docs/module-2/06-intro-to-digital-twins",
+      "section": "Chapter 6: Introduction to Digital Twins in Robotics",
+      "content_preview": "Digital twins are virtual replicas of physical robots...",
+      "relevance_score": 0.87
+    }
+  ],
+  "retrieved_chunks_count": 3,
+  "query_id": "unique-query-identifier"
+}
+```
+
+**Response Schema**:
+- `response` (string): The agent's answer grounded in retrieved content
+- `citations` (array): List of source citations used in the response
+  - `url` (string): URL of the source content
+  - `section` (string): Section heading of the source
+  - `content_preview` (string): Brief preview of the cited content
+  - `relevance_score` (number): Similarity score from vector search
+- `retrieved_chunks_count` (integer): Number of content chunks used
+- `query_id` (string): Unique identifier for this query
+
+**Error Responses**:
+- `400 Bad Request`: Invalid request format
+- `401 Unauthorized`: Invalid or missing API key
+- `500 Internal Server Error`: Agent processing error
+
+## Agent Status Endpoint
+
+### Request
+```
+GET /status
+```
+
+**Response**
+**Success Response (200 OK)**:
+```json
+{
+  "status": "ready",
+  "model": "gpt-4-turbo",
+  "vector_db_status": "connected",
+  "last_heartbeat": "2025-12-27T10:00:00Z"
+}
+```
